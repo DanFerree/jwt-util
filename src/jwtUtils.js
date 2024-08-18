@@ -1,9 +1,42 @@
 // jwtUtils.js
-const { SignJWT, jwtVerify, generateKeyPair, CompactEncrypt, compactDecrypt, JWK } = require('jose');
+const fs = require('fs').promises;
+const path = require('path');
+const { 
+    SignJWT, 
+    jwtVerify, 
+    generateKeyPair, 
+    CompactEncrypt, 
+    compactDecrypt, 
+    importSPKI, 
+    importPKCS8
+ } = require('jose');
 
 // Generate RSA key pair for asymmetric encryption
-async function generateRSAKeys() {
+async function generateRSAKeys(dirPath, name) {
     const { publicKey, privateKey } = await generateKeyPair('RS256');
+    if (dirPath) {
+        // Convert keys to PEM format
+        const publicKeyPem = publicKey.export({ type: 'spki', format: 'pem' });
+        const privateKeyPem = privateKey.export({ type: 'pkcs8', format: 'pem' });
+
+        // Write keys to files
+        await fs.writeFile(path.join(dirPath, name ? `${name}-public.pem` : 'publicKey.pem'), publicKeyPem);
+        await fs.writeFile(path.join(dirPath, name ? `${name}-private.pem` : 'privateKey.pem'), privateKeyPem);
+        // console.log('Keys have been written to files.');
+    }
+    return { publicKey, privateKey };
+}
+
+async function readKeys(dirPath = __dirname, name) {
+    // Read keys from files
+    const publicKeyPem = await fs.readFile(path.join(dirPath, name ? `${name}-public.pem` : 'publicKey.pem'), 'utf8');
+    const privateKeyPem = await fs.readFile(path.join(dirPath, name ? `${name}-private.pem` : 'privateKey.pem'), 'utf8');
+
+    // Import keys
+    const publicKey = await importSPKI(publicKeyPem, 'RS256');
+    const privateKey = await importPKCS8(privateKeyPem, 'RS256');
+
+    console.log('Keys have been read from files and imported.');
     return { publicKey, privateKey };
 }
 
@@ -61,8 +94,11 @@ async function decryptJWT(jwe, privateKey) {
     return new TextDecoder().decode(plaintext);
 }
 
+
 module.exports = {
     generateRSAKeys,
+    readKeys,
+    convertSecretToUint8Array,
     createAndSignJWTWithSecret,
     createAndSignJWTWithRSA,
     verifyJWTWithSecret,

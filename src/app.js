@@ -2,13 +2,15 @@
 const express = require('express');
 const symmetricJWTMiddleware = require('./symmetricMiddleware');
 const asymmetricJWTMiddleware = require('./asymmetricMiddleware');
-const { generateRSAKeys } = require('./jwtUtils');
-
+const { generateRSAKeys, readKeys } = require('./jwtUtils');
+const certPath = process.env.CERT_PATH;
+const clientPublic = process.env.CLIENT_PUBLIC;
+const serverPrivate = process.env.SERVER_PRIVATE;
 const app = express();
 const secret = 'your-256-bit-secret';
 
 (async () => {
-    const { publicKey, privateKey } = await generateRSAKeys();
+    const { publicKey, privateKey } = certPath ? await readKeys(certPath, null) : await generateRSAKeys();
 
     app.use('/symmetric', symmetricJWTMiddleware(secret));
     app.use('/asymmetric', asymmetricJWTMiddleware(publicKey, privateKey));
@@ -21,7 +23,11 @@ const secret = 'your-256-bit-secret';
         res.json({ message: 'Asymmetric route', payload: req.jwtPayload });
     });
 
-    app.listen(3000, () => {
-        console.log('Server running on port 3000');
-    });
+    if (require.main === module) {
+        app.listen(3000, () => {
+            console.log('Server running on port 3000');
+        });
+    }
 })();
+
+module.exports = app;

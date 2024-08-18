@@ -1,7 +1,7 @@
 // asymmetricMiddleware.js
 const { verifyJWTWithRSA, decryptJWT } = require('./jwtUtils');
 
-function asymmetricJWTMiddleware(publicKey, privateKey) {
+function asymmetricJWTMiddleware(signingPublicKey, encryptionPrivateKey) {
     return async (req, res, next) => {
         try {
             const authHeader = req.headers.authorization;
@@ -13,13 +13,20 @@ function asymmetricJWTMiddleware(publicKey, privateKey) {
             let payload;
 
             try {
-                payload = await verifyJWTWithRSA(token, publicKey);
+                payload = await verifyJWTWithRSA(token, signingPublicKey);
             } catch (err) {
-                // If verification fails, try decrypting and then verifying
-                const decryptedToken = await decryptJWT(token, privateKey);
-                payload = await verifyJWTWithRSA(decryptedToken, publicKey);
+                console.log('error validating asummetricJWT: ', err);
             }
-
+            if(!payload){
+                try {
+                    // If verification fails, try decrypting and then verifying
+                    const decryptedToken = await decryptJWT(token, encryptionPrivateKey);
+                    payload = await verifyJWTWithRSA(decryptedToken, signingPublicKey);
+                } catch (error) {
+                    console.log('error decrypting asummetricJWT: ', error);  
+                    throw new Error(error);
+                }
+            }
             req.jwtPayload = payload;
             next();
         } catch (err) {
