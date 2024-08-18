@@ -2,7 +2,7 @@
 const express = require('express');
 const request = require('supertest');
 const asymmetricJWTMiddleware = require('./asymmetricMiddleware');
-const { generateRSAKeys, createAndSignJWTWithRSA, encryptJWT } = require('./jwtUtils');
+const { generateRSAKeys, createAndSignJWTWithRSA, asymmetricEncryptJWT } = require('./jwtUtils');
 
 const payload = { userId: '123', role: 'admin' };
 
@@ -37,7 +37,7 @@ describe('Asymmetric JWT Middleware', () => {
     });
 
     test('should allow access with valid encrypted token', async () => {
-        const encToken = await encryptJWT(token, publicKey);
+        const encToken = await asymmetricEncryptJWT(token, publicKey);
         const res = await request(app)
             .get('/')
             .set('Authorization', `Bearer ${encToken}`);

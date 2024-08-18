@@ -1,42 +1,34 @@
 // jwtUtils.js
-const fs = require('fs').promises;
-const path = require('path');
-const { 
-    SignJWT, 
-    jwtVerify, 
-    generateKeyPair, 
-    CompactEncrypt, 
-    compactDecrypt, 
-    importSPKI, 
-    importPKCS8
- } = require('jose');
+const {
+    SignJWT,
+    jwtVerify,
+    generateKeyPair,
+    CompactEncrypt,
+    compactDecrypt,
+    importSPKI,
+    importPKCS8,
+    exportJWK,
+    importJWK
+} = require('jose');
 
-// Generate RSA key pair for asymmetric encryption
-async function generateRSAKeys(dirPath, name) {
+// Generate RSA key pair for asymmetric encryption and/or signing
+async function generateRSAKeys() {
     const { publicKey, privateKey } = await generateKeyPair('RS256');
-    if (dirPath) {
-        // Convert keys to PEM format
-        const publicKeyPem = publicKey.export({ type: 'spki', format: 'pem' });
-        const privateKeyPem = privateKey.export({ type: 'pkcs8', format: 'pem' });
-
-        // Write keys to files
-        await fs.writeFile(path.join(dirPath, name ? `${name}-public.pem` : 'publicKey.pem'), publicKeyPem);
-        await fs.writeFile(path.join(dirPath, name ? `${name}-private.pem` : 'privateKey.pem'), privateKeyPem);
-        // console.log('Keys have been written to files.');
-    }
     return { publicKey, privateKey };
 }
 
-async function readKeys(dirPath = __dirname, name) {
-    // Read keys from files
-    const publicKeyPem = await fs.readFile(path.join(dirPath, name ? `${name}-public.pem` : 'publicKey.pem'), 'utf8');
-    const privateKeyPem = await fs.readFile(path.join(dirPath, name ? `${name}-private.pem` : 'privateKey.pem'), 'utf8');
+async function keysToPem({ privateKey, publicKey }) {
+    // Convert keys to PEM format
+    const publicPem = publicKey.export({ type: 'spki', format: 'pem' });
+    const privatePem = privateKey.export({ type: 'pkcs8', format: 'pem' });
+    return { publicPem, privatePem };
+}
 
+async function readKeys({ publicPem, privatePem }) {
     // Import keys
-    const publicKey = await importSPKI(publicKeyPem, 'RS256');
-    const privateKey = await importPKCS8(privateKeyPem, 'RS256');
+    const publicKey = await importSPKI(publicPem, 'RS256');
+    const privateKey = await importPKCS8(privatePem, 'RS256');
 
-    console.log('Keys have been read from files and imported.');
     return { publicKey, privateKey };
 }
 
@@ -44,6 +36,26 @@ async function readKeys(dirPath = __dirname, name) {
 function convertSecretToUint8Array(secret) {
     return new TextEncoder().encode(secret);
 }
+
+function uint8ArrayToBase64(uint8Array) {
+    return Buffer.from(uint8Array).toString('base64');
+}
+
+function base64ToUint8Array(base64String) {
+    return new Uint8Array(Buffer.from(base64String, 'base64'));
+}
+
+async function exportSecretKeyToString(secretKey) {
+    const jwk = await exportJWK(secretKey);
+    return JSON.stringify(jwk);
+}
+
+async function importStringToSecretKey(jwkString) {
+    const jwk = JSON.parse(jwkString);
+    const secretKey = await importJWK(jwk, 'A256GCMKW'); // HS256
+    return secretKey;
+}
+
 
 // Create and sign a JWT (symmetric)
 async function createAndSignJWTWithSecret(payload, secret) {
@@ -57,11 +69,11 @@ async function createAndSignJWTWithSecret(payload, secret) {
 }
 
 // Create and sign a JWT (asymmetric)
-async function createAndSignJWTWithRSA(payload, privateKey) {
+async function createAndSignJWTWithRSA(payload, privateKey, expiration = '3m') {
     const jwt = await new SignJWT(payload)
         .setProtectedHeader({ alg: 'RS256' })
         .setIssuedAt()
-        .setExpirationTime('2h')
+        .setExpirationTime(expiration)
         .sign(privateKey);
     return jwt;
 }
@@ -79,8 +91,17 @@ async function verifyJWTWithRSA(token, publicKey) {
     return payload;
 }
 
+async function symmetricEncryptJWT(jwt, secret) {
+    const encoder = new TextEncoder();
+    // const secretKey = encoder.encode(secret);
+    const jwe = await new CompactEncrypt(encoder.encode(jwt))
+        .setProtectedHeader({ alg: 'A256GCMKW', enc: 'A256GCM' })
+        .encrypt(secret);
+    return jwe;
+}
+
 // Encrypt a JWT (asymmetric)
-async function encryptJWT(jwt, publicKey) {
+async function asymmetricEncryptJWT(jwt, publicKey) {
     const encoder = new TextEncoder();
     const jwe = await new CompactEncrypt(encoder.encode(jwt))
         .setProtectedHeader({ alg: 'RSA-OAEP-256', enc: 'A256GCM' })
@@ -97,12 +118,18 @@ async function decryptJWT(jwe, privateKey) {
 
 module.exports = {
     generateRSAKeys,
+    keysToPem,
     readKeys,
     convertSecretToUint8Array,
     createAndSignJWTWithSecret,
     createAndSignJWTWithRSA,
     verifyJWTWithSecret,
     verifyJWTWithRSA,
-    encryptJWT,
-    decryptJWT
+    symmetricEncryptJWT,
+    asymmetricEncryptJWT,
+    decryptJWT,
+    exportSecretKeyToString,
+    importStringToSecretKey,
+    uint8ArrayToBase64,
+    base64ToUint8Array
 };

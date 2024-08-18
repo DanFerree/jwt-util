@@ -1,17 +1,20 @@
 // app.js
 const express = require('express');
+const crypto = require('crypto');
 const symmetricJWTMiddleware = require('./symmetricMiddleware');
 const asymmetricJWTMiddleware = require('./asymmetricMiddleware');
-const { generateRSAKeys, readKeys } = require('./jwtUtils');
-const certPath = process.env.CERT_PATH;
+const { readKeys } = require('./jwtUtils');
 const clientPublic = process.env.CLIENT_PUBLIC;
 const serverPrivate = process.env.SERVER_PRIVATE;
+let secret;
+
 const app = express();
-const secret = 'your-256-bit-secret';
 
 (async () => {
-    const { publicKey, privateKey } = certPath ? await readKeys(certPath, null) : await generateRSAKeys();
-
+    const { publicKey, privateKey } = await readKeys({publicPem: clientPublic, privatePem: serverPrivate});
+    secret = crypto.createSecretKey(process.env.SHARED_SECRET);
+    console.log('secret: ', secret)
+    
     app.use('/symmetric', symmetricJWTMiddleware(secret));
     app.use('/asymmetric', asymmetricJWTMiddleware(publicKey, privateKey));
 

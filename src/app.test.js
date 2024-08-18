@@ -1,20 +1,33 @@
 // app.test.js
 const request = require('supertest');
-const { generateRSAKeys, createAndSignJWTWithSecret, createAndSignJWTWithRSA } = require('./jwtUtils');
+const crypto = require('crypto');
+const { generateSecret } = require('jose');
+const { 
+    generateRSAKeys, 
+    createAndSignJWTWithSecret, 
+    createAndSignJWTWithRSA,
+    symmetricEncryptJWT,
+    asymmetricEncryptJWT, 
+    keysToPem,
+    convertSecretToUint8Array,
+    exportSecretKeyToString
+} = require('./jwtUtils');
 let app;
 
 
-const secret = 'your-256-bit-secret';
 const payload = { userId: '123', role: 'admin' };
-
-let publicKey, privateKey;
+const secretString = 'abcdefghijklmopqrstuvwxyzABCDEFG';
+let secret, publicKey, privateKey;
 
 beforeAll(async () => {
-    const certPath = 'test/certs';
-    const keys = await generateRSAKeys(certPath);
+    const keys = await generateRSAKeys();
     publicKey = keys.publicKey;
     privateKey = keys.privateKey;
-    process.env.CERT_PATH = certPath;
+    const {publicPem, privatePem } = await keysToPem(keys);
+    secret = crypto.createSecretKey(secretString);
+    process.env.SHARED_SECRET = secretString;
+    process.env.CLIENT_PUBLIC = publicPem;
+    process.env.SERVER_PRIVATE = privatePem;
     app = require('./app'); // Assuming app.js exports the app instance
 });
 
@@ -31,6 +44,18 @@ describe('JWT Middleware', () => {
         const res = await request(app)
             .get('/symmetric')
             .set('Authorization', `Bearer ${symmetricToken}`);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.payload).toMatchObject(payload);
+    });
+
+    test('should allow access to symmetric route with valid encrypted token', async () => {
+    console.log('secret: ', secret)
+
+        const encrypted = await symmetricEncryptJWT(symmetricToken, secret)
+        const res = await request(app)
+            .get('/symmetric')
+            .set('Authorization', `Bearer ${encrypted}`);
 
         expect(res.statusCode).toBe(200);
         expect(res.body.payload).toMatchObject(payload);
@@ -56,6 +81,16 @@ describe('JWT Middleware', () => {
         const res = await request(app)
             .get('/asymmetric')
             .set('Authorization', `Bearer ${asymmetricToken}`);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.payload).toMatchObject(payload);
+    });
+
+    test('should allow access to asymmetric route with valid encrypted token', async () => {
+        const encrypted = await asymmetricEncryptJWT(asymmetricToken, publicKey)
+        const res = await request(app)
+            .get('/asymmetric')
+            .set('Authorization', `Bearer ${encrypted}`);
 
         expect(res.statusCode).toBe(200);
         expect(res.body.payload).toMatchObject(payload);

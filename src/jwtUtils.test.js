@@ -1,11 +1,14 @@
 // jwtUtils.test.js
+const { generateSecret } = require('jose');
+const crypto = require('crypto');
 const { 
     generateRSAKeys, 
     createAndSignJWTWithSecret, 
     createAndSignJWTWithRSA, 
     verifyJWTWithSecret, 
-    verifyJWTWithRSA, 
-    encryptJWT, 
+    verifyJWTWithRSA,
+    symmetricEncryptJWT, 
+    asymmetricEncryptJWT, 
     decryptJWT 
 } = require('./jwtUtils');
 
@@ -15,8 +18,9 @@ describe('JWT Utils', () => {
     let rsaKeys;
 
     beforeAll(async () => {
-        secret = 'your-256-bit-secret';
         payload = { userId: '123', role: 'admin' };
+        // secret = await generateSecret('A256GCMKW');
+        secret = crypto.createSecretKey('abcdefghijklmopqrstuvwxyzABCDEFG');
         rsaKeys = await generateRSAKeys();
     });
 
@@ -36,12 +40,27 @@ describe('JWT Utils', () => {
         expect(verifiedPayload).toMatchObject(payload);
     });
 
-    test('should encrypt and decrypt JWT', async () => {
+    test('should asymmetric encrypt and decrypt JWT', async () => {
         const token = await createAndSignJWTWithRSA(payload, rsaKeys.privateKey);
-        const encryptedToken = await encryptJWT(token, rsaKeys.publicKey);
+        const encryptedToken = await asymmetricEncryptJWT(token, rsaKeys.publicKey);
         expect(encryptedToken).toBeDefined();
 
         const decryptedToken = await decryptJWT(encryptedToken, rsaKeys.privateKey);
         expect(decryptedToken).toBe(token);
+
+        const verifiedPayload = await verifyJWTWithRSA(token, rsaKeys.publicKey);
+        expect(verifiedPayload).toMatchObject(payload); 
+    });
+
+    test('should symmetric encrypt and decrypt JWT', async () => {
+        const token = await createAndSignJWTWithSecret(payload, secret);
+        const encryptedToken = await symmetricEncryptJWT(token, secret);
+        expect(encryptedToken).toBeDefined();
+
+        const decryptedToken = await decryptJWT(encryptedToken, secret);
+        expect(decryptedToken).toBe(token);
+
+        const verifiedPayload = await verifyJWTWithSecret(token, secret);
+        expect(verifiedPayload).toMatchObject(payload);
     });
 });
