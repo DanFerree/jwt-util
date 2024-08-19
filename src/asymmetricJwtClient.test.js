@@ -1,10 +1,7 @@
 // asymmetricJwtClient.test.js
-const axios = require('axios');
 const MockAdapter = require('axios-mock-adapter');
 const createAsymmetricAxiosClient = require('./asymmetricJwtClient');
-const { generateRSAKeys, createAndSignJWTWithRSA, encryptJWT, decryptJWT, verifyJWTWithRSA } = require('./jwtUtils');
-
-jest.mock('axios');
+const { generateRSAKeys, decryptJWT, verifyJWTWithRSA } = require('./jwtUtils');
 
 describe('createAsymmetricAxiosClient', () => {
     const payload = { userId: '123', role: 'admin' };
@@ -18,10 +15,10 @@ describe('createAsymmetricAxiosClient', () => {
     });
 
     it('should create an axios client with an asymmetric signed and encrypted token', async () => {
-        const mock = new MockAdapter(axios);
         const client = await createAsymmetricAxiosClient(payload, publicKey, privateKey);
         expect(client).toBeDefined();
-        
+        const mock = new MockAdapter(client);
+
         mock.onGet('/test').reply(async config => {
             const authHeader = config.headers.Authorization;
             const encryptedToken = authHeader.split(' ')[1];

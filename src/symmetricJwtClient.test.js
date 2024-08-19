@@ -1,13 +1,11 @@
 // symmetricJwtClient.test.js
-const axios = require('axios');
 const crypto = require('crypto');
-const { generateSecret } = require('jose');
 const MockAdapter = require('axios-mock-adapter');
 const createSymmetricAxiosClient = require('./symmetricJwtClient');
-const { decryptJWT, verifyJWTWithSecret, convertSecretToUint8Array } = require('./jwtUtils');
+const { decryptJWT, verifyJWTWithSecret } = require('./jwtUtils');
 const secretString = 'abcdefghijklmopqrstuvwxyzABCDEFG';
 
-jest.mock('axios');
+// jest.mock('axios');
 
 describe('createSymmetricAxiosClient', () => {
     let secret;
@@ -19,19 +17,19 @@ describe('createSymmetricAxiosClient', () => {
     });
 
     it('should create an axios client with a symmetric signed and encrypted token', async () => {
-        const mock = new MockAdapter(axios);
         const client = await createSymmetricAxiosClient(payload, secretString);
         expect(client).toBeDefined();
+        const mock = new MockAdapter(client);
 
-        mock.onGet('/test').reply(config => {
+        mock.onGet('/test').reply(async config => {
             const authHeader = config.headers.Authorization;
             const encryptedToken = authHeader.split(' ')[1];
 
             // Decrypt the token
-            const decryptedToken = decryptJWT(encryptedToken, secret);
+            const decryptedToken = await decryptJWT(encryptedToken, secret);
 
             // Verify the token
-            const verifiedPayload = verifyJWTWithSecret(decryptedToken, secret);
+            const verifiedPayload = await verifyJWTWithSecret(decryptedToken, secret);
 
             // Validate the payload
             expect(verifiedPayload).toMatchObject(payload);

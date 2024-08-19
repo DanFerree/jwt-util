@@ -1,23 +1,21 @@
 // symmetricJwtClient.js
 const axios = require('axios');
 const {createSecretKey} = require('crypto');
-const { createAndSignJWTWithSecret, symmetricEncryptJWT, convertSecretToUint8Array } = require('./jwtUtils');
+const { createAndSignJWTWithSecret, symmetricEncryptJWT } = require('./jwtUtils');
 
 // Create an Axios client with symmetric signed and encrypted token
 async function createSymmetricAxiosClient(payload, secretString) {
     try {
         const secret = createSecretKey(secretString);
-        console.log('Payload:', payload);
-        console.log('SecretString:', secretString);
+        // console.log('Payload:', payload);
+        // console.log('Secret:', secret);
 
         const token = await createAndSignJWTWithSecret(payload, secret);
-        console.log('Generated Token:', token);
         if (!token) {
             throw new Error('Failed to create and sign JWT');
         }
 
         const encryptedToken = await symmetricEncryptJWT(token, secret);
-        console.log('Encrypted Token:', encryptedToken);
         if (!encryptedToken) {
             throw new Error('Failed to encrypt JWT');
         }
@@ -28,7 +26,6 @@ async function createSymmetricAxiosClient(payload, secretString) {
             }
         });
 
-        console.log('Axios Client Created:', client);
         return client;
     } catch (error) {
         console.error('Error creating Axios client:', error);

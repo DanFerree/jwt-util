@@ -17,25 +17,27 @@ describe('Symmetric JWT Middleware', () => {
         secret = await generateSecret('A256GCMKW');
         token = await createAndSignJWTWithSecret(payload, secret);
         app = express();
-        app.use(symmetricJWTMiddleware(secret));
-        app.get('/', (req, res) => {
+        app.get('/signed', symmetricJWTMiddleware(secret), (req, res) => {
+            res.json({ message: 'Symmetric route', payload: req.jwtPayload });
+        });
+        app.get('/encrypted', symmetricJWTMiddleware(secret, true), (req, res) => {
             res.json({ message: 'Symmetric route', payload: req.jwtPayload });
         });
     });
 
     test('should allow access with valid token', async () => {
         const res = await request(app)
-            .get('/')
+            .get('/signed')
             .set('Authorization', `Bearer ${token}`);
 
         expect(res.statusCode).toBe(200);
         expect(res.body.payload).toMatchObject(payload);
     });
 
-    test('should allow access with valid token', async () => {
+    test('should allow access with valid encrypted token', async () => {
         const encrypted = await symmetricEncryptJWT(token, secret);
         const res = await request(app)
-            .get('/')
+            .get('/encrypted')
             .set('Authorization', `Bearer ${encrypted}`);
 
         expect(res.statusCode).toBe(200);
@@ -43,7 +45,7 @@ describe('Symmetric JWT Middleware', () => {
     });
     test('should deny access with invalid token', async () => {
         const res = await request(app)
-            .get('/')
+            .get('/signed')
             .set('Authorization', 'Bearer invalidtoken');
 
         expect(res.statusCode).toBe(401);
@@ -51,7 +53,7 @@ describe('Symmetric JWT Middleware', () => {
     });
 
     test('should deny access without token', async () => {
-        const res = await request(app).get('/');
+        const res = await request(app).get('/signed');
 
         expect(res.statusCode).toBe(401);
         expect(res.body.error).toBe('No token provided');

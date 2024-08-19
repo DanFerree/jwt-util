@@ -9,24 +9,13 @@ function asymmetricJWTMiddleware(signingPublicKey, encryptionPrivateKey) {
                 return res.status(401).json({ error: 'No token provided' });
             }
 
-            const token = authHeader.split(' ')[1];
+            let token = authHeader.split(' ')[1];
             let payload;
 
-            try {
-                payload = await verifyJWTWithRSA(token, signingPublicKey);
-            } catch (err) {
-                console.log('error validating asummetricJWT: ', err);
+            if (encryptionPrivateKey) {
+                token = await decryptJWT(token, encryptionPrivateKey);
             }
-            if(!payload){
-                try {
-                    // If verification fails, try decrypting and then verifying
-                    const decryptedToken = await decryptJWT(token, encryptionPrivateKey);
-                    payload = await verifyJWTWithRSA(decryptedToken, signingPublicKey);
-                } catch (error) {
-                    console.log('error decrypting asummetricJWT: ', error);  
-                    throw new Error(error);
-                }
-            }
+            payload = await verifyJWTWithRSA(token, signingPublicKey);
             req.jwtPayload = payload;
             next();
         } catch (err) {
